@@ -30,71 +30,101 @@ public class AdventOfCode2020LeaderboardApplication {
 		return value -> {
 			var client = HttpClient.newHttpClient();
 
-			// get leaderboard
-			var getLeaderboardRequest = HttpRequest.newBuilder()
-					.uri(URI.create(System.getenv("ADVENT_LEADERBOARD_ADDRESS")))
-					.header("cookie", System.getenv("ADVENT_SESSION_TOKEN"))
-					.build();
+			var getLeaderboardRequest = constructAdventRequest();
 
-			HttpResponse<String> response = null;
-			try {
-				response = client.send(getLeaderboardRequest, HttpResponse.BodyHandlers.ofString());
-			} catch (IOException e) {
-				e.printStackTrace();
-				return "error";
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-				return "error";
-			}
+			HttpResponse<String> response = getAdventLeaderboard(client, getLeaderboardRequest);
 
-			JsonNode node = null;
-			try {
-				node = new ObjectMapper().readTree(response.body());
-			} catch (JsonProcessingException e) {
-				e.printStackTrace();
-			}
+			if (response == null) return "error";
 
-			var leaderboardEntries = new ArrayList<LeaderboardEntry>();
-			for (Iterator<JsonNode> it = node.get("members").elements(); it.hasNext(); ) {
-				JsonNode user = it.next();
-				int localScore = user.get("local_score").intValue();
-				String username = user.get("name").toString();
-				leaderboardEntries.add(new LeaderboardEntry(username, localScore));
-			}
+			JsonNode node = convertResponseToJsonTree(response);
 
-			List<LeaderboardEntry> sortedEntries =  leaderboardEntries.stream()
-					.sorted((a, b) -> Integer.compare(b.getScore(), a.getScore()))
-					.collect(Collectors.toList());
+			var leaderboardEntries = constructLeaderboardEntries(node);
 
-			var outputMessage = String.format("The current top 5 are:\n" +
-					"1. %s with %s points\n" +
-					"2. %s with %s points\n" +
-					"3. %s with %s points\n" +
-					"4. %s with %s points\n" +
-					"5. %s with %s points\n",
-					sortedEntries.get(0).getUsername(), sortedEntries.get(0).getScore(),
-					sortedEntries.get(1).getUsername(), sortedEntries.get(1).getScore(),
-					sortedEntries.get(2).getUsername(), sortedEntries.get(2).getScore(),
-					sortedEntries.get(3).getUsername(), sortedEntries.get(3).getScore(),
-					sortedEntries.get(4).getUsername(), sortedEntries.get(4).getScore());
+			List<LeaderboardEntry> sortedEntries = sortEntriesByScore(leaderboardEntries);
 
-			String message = String.format("{\"text\":\"%s\"}", outputMessage.replaceAll("\"", ""));
-			System.out.println(message);
+			String messageText = createMessageText(sortedEntries);
 
-			// send to teams
-			var postToTeamsRequest = HttpRequest.newBuilder()
-					.uri(URI.create(System.getenv("OUTLOOK_WEBHOOK_ADDRESS")))
-					.POST(HttpRequest.BodyPublishers.ofString(message))
-					.build();
+			String message = String.format("{\"text\":\"%s\"}", messageText);
 
-			try {
-				client.send(postToTeamsRequest, HttpResponse.BodyHandlers.ofString());
-			} catch (IOException e) {
-				e.printStackTrace();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+			var postToTeamsRequest = constructTeamsRequest(message);
+
+			postMessageToTeams(client, postToTeamsRequest);
 			return "ok";
 		};
+	}
+
+	private List<LeaderboardEntry> sortEntriesByScore(List<LeaderboardEntry> leaderboardEntries) {
+		return leaderboardEntries.stream()
+				.sorted((a, b) -> Integer.compare(b.getScore(), a.getScore()))
+				.collect(Collectors.toList());
+	}
+
+	private void postMessageToTeams(HttpClient client, HttpRequest postToTeamsRequest) {
+		try {
+			client.send(postToTeamsRequest, HttpResponse.BodyHandlers.ofString());
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private HttpRequest constructTeamsRequest(String message) {
+		return HttpRequest.newBuilder()
+				.uri(URI.create(System.getenv("OUTLOOK_WEBHOOK_ADDRESS")))
+				.POST(HttpRequest.BodyPublishers.ofString(message))
+				.build();
+	}
+
+	private String createMessageText(List<LeaderboardEntry> sortedEntries) {
+		StringBuilder sb = new StringBuilder("The current top 5 are:");
+		int index = 1;
+		for(LeaderboardEntry entry: sortedEntries.subList(0, 5)) {
+			sb.append(String.format(" %s. %s with %s points", index, entry.getUsername(), entry.getScore()));
+			index++;
+		}
+		return sb.toString().replaceAll("\"", "");
+	}
+
+	private List<LeaderboardEntry> constructLeaderboardEntries(JsonNode node) {
+		ArrayList<LeaderboardEntry> leaderboardEntries = new ArrayList<>();
+		for (Iterator<JsonNode> it = node.get("members").elements(); it.hasNext(); ) {
+			JsonNode user = it.next();
+			int localScore = user.get("local_score").intValue();
+			String username = user.get("name").toString();
+			leaderboardEntries.add(new LeaderboardEntry(username, localScore));
+		}
+		return leaderboardEntries;
+	}
+
+	private JsonNode convertResponseToJsonTree(HttpResponse<String> response) {
+		JsonNode node = null;
+		try {
+			node = new ObjectMapper().readTree(response.body());
+		} catch (JsonProcessingException e) {
+			e.printStackTrace();
+		}
+		return node;
+	}
+
+	private HttpResponse<String> getAdventLeaderboard(HttpClient client, HttpRequest getLeaderboardRequest) {
+		HttpResponse<String> response;
+		try {
+			response = client.send(getLeaderboardRequest, HttpResponse.BodyHandlers.ofString());
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+			return null;
+		}
+		return response;
+	}
+
+	private HttpRequest constructAdventRequest() {
+		return HttpRequest.newBuilder()
+				.uri(URI.create(System.getenv("ADVENT_LEADERBOARD_ADDRESS")))
+				.header("cookie", System.getenv("ADVENT_SESSION_TOKEN"))
+				.build();
 	}
 }
