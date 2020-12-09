@@ -12,6 +12,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -27,7 +29,8 @@ public class AdventOfCode2020LeaderboardApplication {
 
 	@Bean
 	public Function<String, String> uppercase() {
-		return value -> {
+		return timeFromInvoker -> {
+			timeFromInvoker = timeFromInvoker.replace("_", ":");
 			var client = HttpClient.newHttpClient();
 
 			var getLeaderboardRequest = constructAdventRequest();
@@ -42,9 +45,7 @@ public class AdventOfCode2020LeaderboardApplication {
 
 			List<LeaderboardEntry> sortedEntries = sortEntriesByScore(leaderboardEntries);
 
-			String messageText = createMessageText(sortedEntries);
-
-			String message = String.format("{\"text\":\"%s\"}", messageText);
+			String message = createMessage(sortedEntries, timeFromInvoker);
 
 			var postToTeamsRequest = constructTeamsRequest(message);
 
@@ -61,7 +62,7 @@ public class AdventOfCode2020LeaderboardApplication {
 
 	private void postMessageToTeams(HttpClient client, HttpRequest postToTeamsRequest) {
 		try {
-			client.send(postToTeamsRequest, HttpResponse.BodyHandlers.ofString());
+			var response = client.send(postToTeamsRequest, HttpResponse.BodyHandlers.ofString());
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (InterruptedException e) {
@@ -76,14 +77,17 @@ public class AdventOfCode2020LeaderboardApplication {
 				.build();
 	}
 
-	private String createMessageText(List<LeaderboardEntry> sortedEntries) {
-		StringBuilder sb = new StringBuilder("The current top 5 are:");
-		int index = 1;
+	private String createMessage(List<LeaderboardEntry> sortedEntries, String time) {
+		ZoneId zonedId = ZoneId.of( "America/New_York" );
+		LocalDate today = LocalDate.now( zonedId );
+		var template = "{ \"type\": \"message\", \"attachments\":[ { \"contentType\":\"application/vnd.microsoft.card.adaptive\", \"contentUrl\":null, \"content\":{ \"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\", \"type\":\"AdaptiveCard\", \"version\":\"1.2\", \"body\": [ { \"type\": \"TextBlock\", \"size\": \"Medium\", \"weight\": \"Bolder\", \"text\": \"Leaderboard as of: TIME_PLACEHOLDER DATE_PLACEHOLDER\" }, { \"type\": \"ColumnSet\", \"columns\": [ { \"type\": \"Column\", \"items\": [ { \"type\": \"Image\", \"url\": \"https://banner2.cleanpng.com/20171127/fa1/gold-number-one-png-clipart-image-5a1bd3372a8220.6763212615117729831741.jpg\", \"size\": \"Small\", \"isVisible\": false } ], \"width\": \"auto\" }, { \"type\": \"Column\", \"items\": [ { \"type\": \"TextBlock\", \"weight\": \"Bolder\", \"text\": \"LEADER_NAME_PLACEHOLDER\", \"wrap\": true }, { \"type\": \"TextBlock\", \"spacing\": \"None\", \"text\": \"LEADER_SCORE_PLACEHOLDER\", \"isSubtle\": true, \"wrap\": true } ], \"width\": \"stretch\" } ] }, { \"type\": \"ColumnSet\", \"columns\": [ { \"type\": \"Column\", \"items\": [ { \"type\": \"Image\", \"url\": \"https://banner2.cleanpng.com/20171127/7c9/gold-number-two-png-clipart-image-5a1bd332aceb10.0628622515117729787083.jpg\", \"size\": \"Small\", \"isVisible\": false } ], \"width\": \"auto\" }, { \"type\": \"Column\", \"items\": [ { \"type\": \"TextBlock\", \"weight\": \"Bolder\", \"text\": \"LEADER_NAME_PLACEHOLDER\", \"wrap\": true }, { \"type\": \"TextBlock\", \"spacing\": \"None\", \"text\": \"LEADER_SCORE_PLACEHOLDER\", \"isSubtle\": true, \"wrap\": true } ], \"width\": \"stretch\" } ] }, { \"type\": \"ColumnSet\", \"columns\": [ { \"type\": \"Column\", \"items\": [ { \"type\": \"Image\", \"url\": \"https://banner2.cleanpng.com/20171127/7c9/gold-number-two-png-clipart-image-5a1bd332aceb10.0628622515117729787083.jpg\", \"size\": \"Small\", \"isVisible\": false } ], \"width\": \"auto\" }, { \"type\": \"Column\", \"items\": [ { \"type\": \"TextBlock\", \"weight\": \"Bolder\", \"text\": \"LEADER_NAME_PLACEHOLDER\", \"wrap\": true }, { \"type\": \"TextBlock\", \"spacing\": \"None\", \"text\": \"LEADER_SCORE_PLACEHOLDER\", \"isSubtle\": true, \"wrap\": true } ], \"width\": \"stretch\" } ] }, { \"type\": \"ColumnSet\", \"columns\": [ { \"type\": \"Column\", \"items\": [ { \"type\": \"Image\", \"url\": \"https://banner2.cleanpng.com/20171127/7c9/gold-number-two-png-clipart-image-5a1bd332aceb10.0628622515117729787083.jpg\", \"size\": \"Small\", \"isVisible\": false } ], \"width\": \"auto\" }, { \"type\": \"Column\", \"items\": [ { \"type\": \"TextBlock\", \"weight\": \"Bolder\", \"text\": \"LEADER_NAME_PLACEHOLDER\", \"wrap\": true }, { \"type\": \"TextBlock\", \"spacing\": \"None\", \"text\": \"LEADER_SCORE_PLACEHOLDER\", \"isSubtle\": true, \"wrap\": true } ], \"width\": \"stretch\" } ] }, { \"type\": \"ColumnSet\", \"columns\": [ { \"type\": \"Column\", \"items\": [ { \"type\": \"Image\", \"url\": \"https://banner2.cleanpng.com/20171127/7c9/gold-number-two-png-clipart-image-5a1bd332aceb10.0628622515117729787083.jpg\", \"size\": \"Small\", \"isVisible\": false } ], \"width\": \"auto\" }, { \"type\": \"Column\", \"items\": [ { \"type\": \"TextBlock\", \"weight\": \"Bolder\", \"text\": \"LEADER_NAME_PLACEHOLDER\", \"wrap\": true }, { \"type\": \"TextBlock\", \"spacing\": \"None\", \"text\": \"LEADER_SCORE_PLACEHOLDER\", \"isSubtle\": true, \"wrap\": true } ], \"width\": \"stretch\" } ] } ], \"backgroundImage\": { \"url\": \"https://miro.medium.com/max/1200/1*XtCMwEXZe2VcH-jfcHwCBQ.jpeg\" } } } ] }";
 		for(LeaderboardEntry entry: sortedEntries.subList(0, 5)) {
-			sb.append(String.format(" %s. %s with %s points", index, entry.getUsername(), entry.getScore()));
-			index++;
+			template = template.replaceFirst("TIME_PLACEHOLDER", time)
+					.replaceFirst("DATE_PLACEHOLDER", today.toString())
+					.replaceFirst("LEADER_NAME_PLACEHOLDER", entry.getUsername())
+					.replaceFirst("LEADER_SCORE_PLACEHOLDER", Integer.toString(entry.getScore())).replace("\"\"", "\"");
 		}
-		return sb.toString().replaceAll("\"", "");
+		return template;
 	}
 
 	private List<LeaderboardEntry> constructLeaderboardEntries(JsonNode node) {
