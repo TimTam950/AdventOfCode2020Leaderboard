@@ -1,0 +1,8 @@
+steps:
+  - name: 'gcr.io/cloud-builders/mvn'
+    args: ['package']
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['gcloud', 'alpha', 'functions', 'deploy', 'AdventOfCode2020Leaderboard', '--entry-point',
+    'org.springframework.cloud.function.adapter.gcp.GcfJarLauncher', '--runtime', 'java11',
+    '--trigger-http', '--source', 'target/deploy', '--memory', '512MB',
+    '--service-account=adventfunctioninvoker@adventofcode2020leaderboard.iam.gserviceaccount.com']
